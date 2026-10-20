@@ -121,7 +121,7 @@
         <div class="v"><span id="air">–</span></div></div>
       <div class="stat"><div class="k">Pulley Ratio</div><div class="v" id="ratio">–</div></div>
       <div class="stat"><div class="k">Pressure Ratio</div><div class="v" id="pr">–</div></div>
-      <div class="stat wide"><div class="k">Free-Air Displacement</div>
+      <div class="stat wide"><div class="k">Free-Air Displacement per Revolution</div>
         <div class="v"><span id="fad">–</span></div></div>
       <div class="stat wide boost"><div class="k">Theoretical Boost</div>
         <div class="v"><span id="boost">–</span> <small>psi</small></div></div>
@@ -274,7 +274,7 @@
     var air = eng * 0.5;
     var ratio = BASE_PULLEY / pul;
     var fad = sc * ratio;
-    var boost = ATM * ratio - ATM;
+    var boost = ATM * (fad / air) - ATM;
     var pr = boost > 0 ? ATM / boost : null; // per spec: 14.7 / boost (undefined at 0 or negative boost)
 
     $('air').innerHTML = both(air);
