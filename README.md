@@ -8,4 +8,4 @@ Outputs: engine air requirement per rev, pulley ratio (7" / pulley), free-air di
 theoretical boost, pressure ratio, a tachometer (engine RPM inside, supercharger RPM outside)
 and an airflow gauge in m^3/hr.
 
-Pressure ratio is computed as (boost + 14.7) / 14.7 (absolute manifold pressure over atmospheric).
+Theoretical boost = 14.7 x pulley ratio - 14.7. Pressure ratio = 14.7 / boost (shown as a dash when boost is 0 or negative).

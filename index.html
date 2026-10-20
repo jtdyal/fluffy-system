@@ -275,13 +275,13 @@
     var ratio = BASE_PULLEY / pul;
     var fad = sc * ratio;
     var boost = ATM * ratio - ATM;
-    var pr = (boost + ATM) / ATM; // absolute manifold pressure / atmospheric
+    var pr = boost > 0 ? ATM / boost : null; // per spec: 14.7 / boost (undefined at 0 or negative boost)
 
     $('air').innerHTML = both(air);
     $('ratio').textContent = num(ratio, 3);
     $('fad').innerHTML = both(fad);
     $('boost').textContent = num(boost, 1);
-    $('pr').textContent = num(pr, 2) + ' : 1';
+    $('pr').textContent = pr === null ? '–' : num(pr, 2);
 
     tachLabelsOut.forEach(function (l) { l.node.textContent = fmtK(Math.round(l.rpm * ratio / 10) * 10); });
     tachEng.textContent = num(rpm, 0);
