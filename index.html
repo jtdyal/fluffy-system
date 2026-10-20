@@ -79,7 +79,7 @@
 <main>
   <header>
     <h1>Supercharger <span>Boost</span> Calculator</h1>
-    <p class="sub">Theoretical numbers, assuming 100% efficiency and a 7&Prime; crank pulley.</p>
+    <p class="sub">Boost and flow are theoretical (100% volumetric efficiency, 7&Prime; crank pulley). Temperature uses the efficiency you enter.</p>
   </header>
 
   <section class="card" aria-labelledby="in-h">
@@ -97,7 +97,7 @@
     <div class="field">
       <label for="sc">Supercharger displacement (per rev)</label>
       <div class="row">
-        <input id="sc" type="number" inputmode="decimal" min="0" step="any" value="144">
+        <input id="sc" type="number" inputmode="decimal" min="0" step="any" value="112">
         <div class="seg" role="group" aria-label="Supercharger displacement unit">
           <button type="button" data-for="sc" data-u="cc" aria-pressed="false">cc</button>
           <button type="button" data-for="sc" data-u="ci" aria-pressed="true">ci</button>
@@ -109,6 +109,20 @@
       <div class="row">
         <input id="pul" type="number" inputmode="decimal" min="0" step="any" value="3.5">
         <span class="unit">inches</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="amb">Intake air temperature</label>
+      <div class="row">
+        <input id="amb" type="number" inputmode="decimal" step="any" value="70">
+        <span class="unit">&deg;F</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="eff">Supercharger adiabatic efficiency</label>
+      <div class="row">
+        <input id="eff" type="number" inputmode="decimal" min="1" max="100" step="any" value="60">
+        <span class="unit">%</span>
       </div>
     </div>
     <p class="err" id="err" role="alert"></p>
@@ -125,6 +139,12 @@
         <div class="v"><span id="fad">–</span></div></div>
       <div class="stat wide boost"><div class="k">Theoretical Boost</div>
         <div class="v"><span id="boost">–</span> <small>psi</small></div></div>
+      <div class="stat"><div class="k">Ideal Temp Rise (100% eff.)</div>
+        <div class="v"><span id="dtI">–</span> <small>&deg;F</small></div></div>
+      <div class="stat boost"><div class="k">Expected Temp Rise</div>
+        <div class="v"><span id="dt">–</span> <small>&deg;F</small></div></div>
+      <div class="stat wide"><div class="k">Expected Charge Temperature</div>
+        <div class="v"><span id="tout">–</span> <small>&deg;F</small></div></div>
     </div>
   </section>
 
@@ -140,6 +160,7 @@
     <div class="legend"><span>Inner: Engine RPM</span><span><b>Outer: Supercharger RPM</b></span></div>
 
     <svg class="gauge" id="flow" viewBox="0 0 300 300" role="img" aria-label="Engine airflow gauge"></svg>
+    <div class="legend"><span>Inner: m&sup3;/hr</span><span><b>Outer: CFM</b></span></div>
   </section>
 
   <footer>Flow = RPM &times; engine air requirement per revolution (engine displacement &times; 0.5).</footer>
@@ -213,13 +234,15 @@
   })();
 
   /* ---- flow gauge ---- */
-  var flowSvg = $('flow'), flowNeedle, flowVal, flowTicks;
+  var flowSvg = $('flow'), flowNeedle, flowVal, flowValCfm, flowTicks;
+  var M3H_TO_CFM = 0.588578;
   (function buildFlow() {
     face(flowSvg);
     flowTicks = el(flowSvg, 'g', {});
     el(flowSvg, 'text', { x: CX, y: 190, 'class': 'g-cap' }, 'FLOW');
     flowVal = el(flowSvg, 'text', { x: CX, y: 220, 'class': 'g-val' }, '');
-    el(flowSvg, 'text', { x: CX, y: 240, 'class': 'g-cap' }, 'm³/hr');
+    el(flowSvg, 'text', { x: CX, y: 237, 'class': 'g-cap' }, 'm³/hr');
+    flowValCfm = el(flowSvg, 'text', { x: CX, y: 258, 'class': 'g-val2' }, '');
     flowNeedle = needle(flowSvg);
   })();
   var flowMax = 0;
@@ -233,6 +256,8 @@
       tick(flowTicks, t, 13, 'g-tick');
       var p = pt(t, R - 27);
       el(flowTicks, 'text', { x: p[0], y: p[1], 'class': 'g-lbl-in' }, num(step * i, step < 10 ? 1 : 0));
+      var q = pt(t, R + 17);
+      el(flowTicks, 'text', { x: q[0], y: q[1], 'class': 'g-lbl-out' }, num(step * i * M3H_TO_CFM, 0));
     }
     for (var j = 0; j < 16; j++) if (j % 2) tick(flowTicks, j / 16, 7, 'g-minor');
   }
@@ -261,11 +286,12 @@
     var rpm = parseInt($('rpm').value, 10);
     $('rpmOut').textContent = rpm;
     var eng = toCc('eng'), sc = toCc('sc'), pul = parseFloat($('pul').value);
-    var ok = eng > 0 && sc > 0 && pul > 0;
-    $('err').textContent = ok ? '' : 'Enter positive values for all three inputs.';
+    var amb = parseFloat($('amb').value), eff = parseFloat($('eff').value);
+    var ok = eng > 0 && sc > 0 && pul > 0 && isFinite(amb) && eff > 0 && eff <= 100;
+    $('err').textContent = ok ? '' : 'Enter positive sizes, a temperature, and an efficiency from 1 to 100%.';
     if (!ok) {
-      ['air', 'fad', 'ratio', 'boost', 'pr'].forEach(function (i) { $(i).textContent = '–'; });
-      tachSc.textContent = '–'; flowVal.textContent = '–';
+      ['air', 'fad', 'ratio', 'boost', 'pr', 'dtI', 'dt', 'tout'].forEach(function (i) { $(i).textContent = '–'; });
+      tachSc.textContent = '–'; flowVal.textContent = '–'; flowValCfm.textContent = '–';
       tachEng.textContent = rpm;
       tachLabelsOut.forEach(function (l) { l.node.textContent = ''; });
       rot(tachNeedle, (rpm - RPM_MIN) / (RPM_MAX - RPM_MIN)); rot(flowNeedle, 0);
@@ -275,13 +301,20 @@
     var ratio = BASE_PULLEY / pul;
     var fad = sc * ratio;
     var boost = ATM * (fad / air) - ATM;
-    var pr = boost > 0 ? ATM / boost : null; // per spec: 14.7 / boost (undefined at 0 or negative boost)
+    var pr = (boost + ATM) / ATM; // absolute outlet pressure / absolute inlet pressure
+    // adiabatic compression: T2 = T1 * PR^((k-1)/k), k = 1.4; actual rise = ideal rise / efficiency
+    var tAbs = amb + 459.67;
+    var dtIdeal = pr > 1 ? tAbs * (Math.pow(pr, 0.2857) - 1) : 0;
+    var dt = dtIdeal / (eff / 100);
 
     $('air').innerHTML = both(air);
     $('ratio').textContent = num(ratio, 3);
     $('fad').innerHTML = both(fad);
     $('boost').textContent = num(boost, 1);
-    $('pr').textContent = pr === null ? '–' : num(pr, 2);
+    $('pr').textContent = num(pr, 2);
+    $('dtI').textContent = num(dtIdeal, 0);
+    $('dt').textContent = num(dt, 0);
+    $('tout').textContent = num(amb + dt, 0);
 
     tachLabelsOut.forEach(function (l) { l.node.textContent = fmtK(Math.round(l.rpm * ratio / 10) * 10); });
     tachEng.textContent = num(rpm, 0);
@@ -291,6 +324,7 @@
     rebuildFlowScale(niceMax(flowAt(RPM_MAX, air)));
     var f = flowAt(rpm, air);
     flowVal.textContent = num(f, 1);
+    flowValCfm.textContent = num(f * M3H_TO_CFM, 1) + ' CFM';
     rot(flowNeedle, Math.min(f / flowMax, 1));
   }
 
@@ -311,7 +345,7 @@
       update();
     });
   });
-  ['eng', 'sc', 'pul', 'rpm'].forEach(function (id) { $(id).addEventListener('input', update); });
+  ['eng', 'sc', 'pul', 'rpm', 'amb', 'eff'].forEach(function (id) { $(id).addEventListener('input', update); });
   update();
 })();
 </script>
