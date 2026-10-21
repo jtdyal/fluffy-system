@@ -119,14 +119,20 @@
     <div class="field">
       <label id="mode-l">Supercharger</label>
       <div class="seg full" role="group" aria-labelledby="mode-l">
-        <button type="button" data-mode="model" aria-pressed="false">Choose model</button>
-        <button type="button" data-mode="manual" aria-pressed="true">Displacement + A.E.</button>
+        <button type="button" data-mode="model" aria-pressed="false">Model</button>
+        <button type="button" data-mode="manual" aria-pressed="true">Displ. + A.E.</button>
+        <button type="button" data-mode="cent" aria-pressed="false">Centrifugal</button>
       </div>
     </div>
     <div class="field" id="modelBox" hidden>
       <label for="model">Model</label>
       <select id="model"></select>
       <p class="note" id="modelInfo"></p>
+    </div>
+    <div class="field" id="centBox" hidden>
+      <label for="rmodel">Rotrex model</label>
+      <select id="rmodel"></select>
+      <p class="note" id="rInfo"></p>
     </div>
     <div class="field" id="manualBox">
       <div class="pair">
@@ -165,10 +171,14 @@
         <div class="v"><span id="air">–</span></div></div>
       <div class="stat"><div class="k">Pulley Ratio</div><div class="v" id="ratio">–</div></div>
       <div class="stat"><div class="k">Pressure Ratio</div><div class="v" id="pr">–</div></div>
-      <div class="stat wide"><div class="k">Free-Air Displacement per Revolution</div>
+      <div class="stat wide" id="fadCard"><div class="k">Free-Air Displacement per Revolution</div>
         <div class="v"><span id="fad">–</span></div></div>
       <div class="stat wide boost"><div class="k">Theoretical Boost</div>
         <div class="v"><span id="boost">–</span> <small>psi</small></div></div>
+      <div class="stat" id="impCard" hidden><div class="k">Impeller RPM</div>
+        <div class="v"><span id="imp">–</span></div></div>
+      <div class="stat" id="mfCard" hidden><div class="k">Engine airflow vs rated max</div>
+        <div class="v"><span id="mflow">–</span></div></div>
     </div>
   </section>
 
@@ -353,6 +363,31 @@
     { g: 'Whipple', n: 'W245AX', cc: 4000, ae: 78, src: 'mfr' }
   ];
   var SRC_TXT = { mfr: 'manufacturer peak', spec: 'listed as 70%+', est: 'estimate' };
+  // Rotrex centrifugal: n = impeller:input drive ratio, nmax = peak impeller rpm, flow = max kg/s,
+  // prmax = pressure ratio at peak speed (catalog max boost; C38R from datasheet), ae = peak A.E. %
+  // (C38R from the published compressor maps, others estimated). C30-84 ratio assumed equal to the other C30s.
+  var ROTREX = [
+    { n: 'C15-20', d: 33, r: 12.67, nmax: 180000, flow: 0.158, prmax: (2.15 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C15-60', d: 42, r: 12.67, nmax: 150000, flow: 0.22, prmax: (1.35 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C30-74', d: 50, r: 9.49, nmax: 120000, flow: 0.31, prmax: (1.82 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C30-84', d: 50, r: 9.49, nmax: 120000, flow: 0.32, prmax: (1.82 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C30-94', d: 60, r: 9.49, nmax: 100000, flow: 0.39, prmax: (1.52 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C30-94P', d: 60, r: 9.49, nmax: 100000, flow: 0.44, prmax: (1.64 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C38-61', d: 65, r: 7.5, nmax: 90000, flow: 0.48, prmax: (1.9 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C38-71', d: 67, r: 7.5, nmax: 90000, flow: 0.55, prmax: (1.82 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C38-81', d: 69, r: 7.5, nmax: 90000, flow: 0.58, prmax: (1.85 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C38-91/92', d: 69, r: 7.5, nmax: 90000, flow: 0.63, prmax: (1.94 + 1.01325) / 1.01325, ae: 70, src: 'est' },
+    { n: 'C38R-112', d: 75.9, r: 6, nmax: 90000, flow: 0.84, prmax: 3.38, ae: 75, src: 'map' },
+    { n: 'C38R-122', d: 84.8, r: 6, nmax: 90000, flow: 1.1, prmax: 2.82, ae: 72, src: 'map' }
+  ];
+  SRC_TXT.map = 'peak of published map';
+  (function buildRotrex() {
+    var sel = $('rmodel');
+    ROTREX.forEach(function (m, i) {
+      var o = document.createElement('option'); o.value = i; o.textContent = m.n; sel.appendChild(o);
+    });
+    sel.value = '10';
+  })();
   var mode = 'manual';
   (function buildModels() {
     var sel = $('model'), grp = null, last = '';
@@ -362,6 +397,7 @@
     });
   })();
   function sc() {
+    if (mode === 'cent') return { cc: 0, eff: ROTREX[$('rmodel').value].ae };
     if (mode === 'model') { var m = MODELS[$('model').value]; return { cc: m.cc, eff: m.ae }; }
     return { cc: toCc('sc'), eff: parseFloat($('eff').value) };
   }
@@ -369,6 +405,13 @@
     var m = MODELS[$('model').value];
     $('modelInfo').textContent = num(m.cc, 0) + ' cc / ' + num(m.cc / CC_PER_CI, 1) + ' ci per rev \u00b7 A.E. ' +
       m.ae + '% (' + SRC_TXT[m.src] + '). Peak value; real A.E. varies with RPM and pressure ratio.';
+  }
+
+  function showRotrexInfo() {
+    var m = ROTREX[$('rmodel').value];
+    $('rInfo').textContent = m.d + ' mm impeller \u00b7 1:' + m.r + ' drive \u00b7 max ' + num(m.nmax, 0) + ' rpm \u00b7 max flow ' +
+      m.flow + ' kg/s \u00b7 A.E. ' + m.ae + '% (' + SRC_TXT[m.src] + '). Boost is estimated from impeller speed at the top of each speed line; ' +
+      'real boost drops as the engine draws more air.';
   }
 
   /* ---- calculation ---- */
@@ -383,10 +426,10 @@
     var rpm = parseInt($('rpm').value, 10);
     $('rpmOut').textContent = rpm;
     var S = sc(), eng = toCc('eng'), scCc = S.cc, pul = parseFloat($('pul').value), eff = S.eff;
-    var ok = eng > 0 && scCc > 0 && pul > 0 && eff > 0 && eff <= 100;
+    var ok = eng > 0 && (mode === 'cent' || scCc > 0) && pul > 0 && eff > 0 && eff <= 100;
     $('err').textContent = ok ? '' : 'Enter positive sizes and an A.E. from 1 to 100%.';
     if (!ok) {
-      ['air', 'fad', 'ratio', 'boost', 'pr'].forEach(function (i) { $(i).textContent = '–'; });
+      ['air', 'fad', 'ratio', 'boost', 'pr', 'imp', 'mflow'].forEach(function (i) { $(i).textContent = '–'; });
       drawChart(null, 1);
       tachSc.textContent = '–'; flowVal.textContent = '–'; flowValCfm.textContent = '–';
       tachEng.textContent = rpm;
@@ -396,13 +439,27 @@
     }
     var air = eng * 0.5;
     var ratio = BASE_PULLEY / pul;
-    var fad = scCc * ratio;
-    var boost = ATM * (fad / air) - ATM;
-    var pr = (boost + ATM) / ATM; // absolute outlet pressure / absolute inlet pressure
+    var fad, boost, pr, cent = mode === 'cent';
+    $('fadCard').hidden = cent; $('impCard').hidden = !cent; $('mfCard').hidden = !cent;
+    if (cent) {
+      var rm = ROTREX[$('rmodel').value];
+      var nImp = rpm * ratio * rm.r;
+      // similarity: pressure rise scales with tip speed squared, calibrated so PR = PRmax at peak impeller speed
+      pr = Math.pow(1 + (Math.pow(rm.prmax, 1 / 3.5) - 1) * Math.pow(nImp / rm.nmax, 2), 3.5);
+      boost = ATM * (pr - 1);
+      var tOutK = (REF_T + idealRise(pr, REF_T) / (eff / 100) + 459.67) * 5 / 9;
+      var mdot = rpm / 60 * air * 1e-6 * pr * 101325 / (287.05 * tOutK); // kg/s at manifold density
+      $('imp').textContent = num(nImp, 0) + (nImp > rm.nmax ? ' (over max)' : '');
+      $('mflow').textContent = num(mdot, 2) + ' / ' + rm.flow + ' kg/s (' + num(mdot / rm.flow * 100, 0) + '%)';
+    } else {
+      fad = scCc * ratio;
+      boost = ATM * (fad / air) - ATM;
+      pr = (boost + ATM) / ATM; // absolute outlet pressure / absolute inlet pressure
+      $('fad').innerHTML = both(fad);
+    }
 
     $('air').innerHTML = both(air);
     $('ratio').textContent = num(ratio, 3);
-    $('fad').innerHTML = both(fad);
     $('boost').textContent = num(boost, 1);
     $('pr').textContent = num(pr, 2);
     drawChart(pr, eff / 100);
@@ -438,6 +495,7 @@
   });
   ['eng', 'sc', 'pul', 'rpm', 'eff'].forEach(function (id) { $(id).addEventListener('input', update); });
   $('model').addEventListener('change', function () { showModelInfo(); update(); });
+  $('rmodel').addEventListener('change', function () { showRotrexInfo(); update(); });
   document.querySelectorAll('.seg button[data-mode]').forEach(function (b) {
     b.addEventListener('click', function () {
       mode = b.dataset.mode;
@@ -446,7 +504,9 @@
       });
       $('modelBox').hidden = mode !== 'model';
       $('manualBox').hidden = mode !== 'manual';
+      $('centBox').hidden = mode !== 'cent';
       if (mode === 'model') showModelInfo();
+      if (mode === 'cent') showRotrexInfo();
       update();
     });
   });
