@@ -1,5 +1,7 @@
 # Supercharger Boost Calculator
 
+**Live demo:** https://jtdyal.github.io/fluffy-system/
+
 Mobile-first, single-file web calculator (`index.html`, no build step, no dependencies).
 Open the file in a browser or host it with GitHub Pages.
 
