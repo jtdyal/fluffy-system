@@ -91,6 +91,9 @@
   .legend { display: flex; justify-content: center; gap: 16px; font-size: .78rem; color: var(--muted); margin-top: 2px; }
   .legend b { color: var(--lbl-out); }
   input[type=range] { width: 100%; accent-color: var(--accent); height: 36px; }
+  .sliders input[type=range] { height: 26px; margin: 0 0 8px; }
+  .sliders .rpmline { margin-top: 2px; }
+  select.nomap, option.nomap { color: #8d9199; }
   .rpmline { display: flex; justify-content: space-between; align-items: baseline; }
   .rpmline output { font-weight: 700; font-variant-numeric: tabular-nums; }
   footer { color: var(--muted); font-size: .75rem; text-align: center; }
@@ -184,30 +187,29 @@
     </div>
   </section>
 
-  <section class="card" aria-labelledby="t-h">
-    <h2 id="t-h">Expected Charge Temperature</h2>
-    <div class="rpmline">
-      <label for="amb" style="margin:0">Intake air temp (&deg;F)</label>
-      <output id="ambOut" for="amb">70</output>
-    </div>
-    <input id="amb" type="range" min="30" max="110" step="1" value="70">
-    <svg class="gauge" id="tchart" viewBox="0 0 300 300" role="img" aria-label="Charge temperature gauge"></svg>
-    <div class="legend"><span>Inner: Intake air temp</span><span><b>Outer: Charge temp</b></span></div>
-  </section>
-
   <section class="card" aria-labelledby="g-h">
     <h2 id="g-h">Gauges</h2>
-    <div class="rpmline">
-      <label for="rpm" style="margin:0">Engine RPM</label>
-      <output id="rpmOut" for="rpm">5500</output>
+    <div class="sliders">
+      <div class="rpmline">
+        <label for="rpm" style="margin:0">Engine RPM</label>
+        <output id="rpmOut" for="rpm">5500</output>
+      </div>
+      <input id="rpm" type="range" min="1000" max="8000" step="100" value="5500">
+      <div class="rpmline">
+        <label for="amb" style="margin:0">Intake air temp (&deg;F)</label>
+        <output id="ambOut" for="amb">70</output>
+      </div>
+      <input id="amb" type="range" min="30" max="110" step="1" value="70">
     </div>
-    <input id="rpm" type="range" min="1000" max="8000" step="100" value="5500">
 
     <svg class="gauge" id="tach" viewBox="0 0 300 300" role="img" aria-label="Tachometer"></svg>
     <div class="legend"><span>Inner: Engine RPM</span><span><b>Outer: Supercharger RPM</b></span></div>
 
     <svg class="gauge" id="flow" viewBox="0 0 300 300" role="img" aria-label="Engine airflow gauge"></svg>
     <div class="legend"><span>Inner: m&sup3;/hr</span><span><b>Outer: CFM</b></span></div>
+
+    <svg class="gauge" id="tchart" viewBox="0 0 300 300" role="img" aria-label="Charge temperature gauge"></svg>
+    <div class="legend"><span>Inner: Intake air temp</span><span><b>Outer: Charge temp</b></span></div>
   </section>
 
   <footer>Flow = RPM &times; engine air requirement per revolution (engine displacement &times; 0.5).</footer>
@@ -408,7 +410,7 @@
   (function buildRotrex() {
     var sel = $('rmodel');
     ROTREX.forEach(function (m, i) {
-      var o = document.createElement('option'); o.value = i; o.textContent = m.n; sel.appendChild(o);
+      var o = document.createElement('option'); o.value = i; o.textContent = m.n; o.className = 'nomap'; sel.appendChild(o);
     });
     sel.value = '10';
   })();
@@ -417,7 +419,7 @@
     var sel = $('model'), grp = null, last = '';
     MODELS.forEach(function (m, i) {
       if (m.g !== last) { grp = document.createElement('optgroup'); grp.label = m.g; sel.appendChild(grp); last = m.g; }
-      var o = document.createElement('option'); o.value = i; o.textContent = m.n; grp.appendChild(o);
+      var o = document.createElement('option'); o.value = i; o.textContent = m.n; if (!m.map) o.className = 'nomap'; grp.appendChild(o);
     });
   })();
   function sc() {
@@ -448,12 +450,14 @@
   }
   function showModelInfo() {
     var m = MODELS[$('model').value];
+    $('model').className = m.map ? '' : 'nomap';
     $('modelInfo').textContent = num(m.cc, 0) + ' cc / ' + num(m.cc / CC_PER_CI, 1) + ' ci per rev \u00b7 A.E. ' +
       m.ae + '% (' + SRC_TXT[m.src] + ').' + (m.map ? ' The live value below follows RPM and boost, read from Eaton\u2019s map (about \u00b13 points).' : ' Peak value; real A.E. varies with RPM and pressure ratio.');
   }
 
   function showRotrexInfo() {
     var m = ROTREX[$('rmodel').value];
+    $('rmodel').className = 'nomap';
     $('rInfo').textContent = m.d + ' mm impeller \u00b7 1:' + m.r + ' drive \u00b7 max ' + num(m.nmax, 0) + ' rpm \u00b7 max flow ' +
       m.flow + ' kg/s \u00b7 A.E. ' + m.ae + '% (' + SRC_TXT[m.src] + '). Boost is estimated from impeller speed at the top of each speed line; ' +
       'real boost drops as the engine draws more air.';
