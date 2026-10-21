@@ -186,8 +186,13 @@
 
   <section class="card" aria-labelledby="t-h">
     <h2 id="t-h">Expected Charge Temperature</h2>
-    <svg class="gauge" id="tchart" viewBox="0 0 300 200" role="img" aria-label="Charge temperature versus intake air temperature"></svg>
-    <div class="legend"><span><b>Expected (at A.E.)</b></span><span>Ideal (100%)</span></div>
+    <div class="rpmline">
+      <label for="amb" style="margin:0">Intake air temp (&deg;F)</label>
+      <output id="ambOut" for="amb">70</output>
+    </div>
+    <input id="amb" type="range" min="30" max="110" step="1" value="70">
+    <svg class="gauge" id="tchart" viewBox="0 0 300 300" role="img" aria-label="Charge temperature gauge"></svg>
+    <div class="legend"><span>Inner: Intake air temp</span><span><b>Outer: Charge temp</b></span></div>
   </section>
 
   <section class="card" aria-labelledby="g-h">
@@ -318,35 +323,39 @@
 
   /* ---- charge temperature chart ---- */
   var REF_T = 70, T_MIN = 30, T_MAX = 110;
-  var tchart = $('tchart');
+  var tchart = $('tchart'), tNeedle, tIn, tOut, tOutLbls = [];
   function idealRise(pr, tF) { return pr > 1 ? (tF + 459.67) * (Math.pow(pr, 0.2857) - 1) : 0; }
+  (function buildTemp() {
+    face(tchart);
+    for (var t = T_MIN; t <= T_MAX; t += 5) {
+      var f = (t - T_MIN) / (T_MAX - T_MIN);
+      if (t % 10 === 0) {
+        tick(tchart, f, 13, 'g-tick');
+        var p = pt(f, R - 27);
+        el(tchart, 'text', { x: p[0], y: p[1], 'class': 'g-lbl-in' }, t);
+        var q = pt(f, R + 17);
+        tOutLbls.push({ t: t, node: el(tchart, 'text', { x: q[0], y: q[1], 'class': 'g-lbl-out' }, '') });
+      } else tick(tchart, f, 7, 'g-minor');
+    }
+    el(tchart, 'text', { x: CX, y: 190, 'class': 'g-cap' }, 'INTAKE AIR \u00b0F');
+    tIn = el(tchart, 'text', { x: CX, y: 215, 'class': 'g-val' }, '');
+    el(tchart, 'text', { x: CX, y: 237, 'class': 'g-cap' }, 'CHARGE TEMP \u00b0F');
+    tOut = el(tchart, 'text', { x: CX, y: 258, 'class': 'g-val2' }, '');
+    tNeedle = needle(tchart);
+  })();
   function drawChart(pr, effFrac) {
-    while (tchart.firstChild) tchart.removeChild(tchart.firstChild);
-    if (pr === null) return;
-    var L = 40, Rr = 288, T = 22, B = 160;
-    var exp = function (t) { return t + idealRise(pr, t) / effFrac; };
-    var ide = function (t) { return t + idealRise(pr, t); };
-    var yMin = 20, yMax = Math.max(100, Math.ceil(exp(T_MAX) / 50) * 50);
-    var X = function (t) { return L + (t - T_MIN) / (T_MAX - T_MIN) * (Rr - L); };
-    var Y = function (v) { return B - (v - yMin) / (yMax - yMin) * (B - T); };
-    var yStep = (yMax - yMin) > 200 ? 100 : 50;
-    for (var v = Math.ceil(yMin / yStep) * yStep; v <= yMax; v += yStep) {
-      el(tchart, 'line', { x1: L, y1: Y(v), x2: Rr, y2: Y(v), 'class': 'c-grid' });
-      el(tchart, 'text', { x: L - 5, y: Y(v) + 3, 'class': 'c-txt', 'text-anchor': 'end' }, v);
+    var amb = parseFloat($('amb').value);
+    $('ambOut').textContent = amb;
+    tIn.textContent = num(amb, 0);
+    rot(tNeedle, (amb - T_MIN) / (T_MAX - T_MIN));
+    if (pr === null) {
+      tOut.textContent = '\u2013';
+      tOutLbls.forEach(function (l) { l.node.textContent = ''; });
+      return;
     }
-    for (var t = T_MIN; t <= T_MAX; t += 20) {
-      el(tchart, 'text', { x: X(t), y: B + 14, 'class': 'c-txt', 'text-anchor': 'middle' }, t);
-    }
-    el(tchart, 'text', { x: (L + Rr) / 2, y: B + 30, 'class': 'c-txt', 'text-anchor': 'middle' }, 'Intake air temp (°F)');
-    el(tchart, 'text', { x: L, y: 10, 'class': 'c-txt' }, 'Charge temp (°F)');
-    [[ide, 'c-ideal'], [exp, 'c-exp']].forEach(function (ln) {
-      var d = '';
-      for (var t2 = T_MIN; t2 <= T_MAX; t2 += 5) d += (d ? 'L' : 'M') + X(t2).toFixed(1) + ' ' + Y(ln[0](t2)).toFixed(1);
-      el(tchart, 'path', { d: d, 'class': ln[1] });
-    });
-    var rv = exp(REF_T);
-    el(tchart, 'circle', { cx: X(REF_T), cy: Y(rv), r: 5, 'class': 'c-dot' });
-    el(tchart, 'text', { x: X(REF_T), y: Y(rv) - 10, 'class': 'c-val', 'text-anchor': 'middle' }, num(rv, 0) + '°F @ ' + REF_T + '°F');
+    var charge = function (t) { return t + idealRise(pr, t) / effFrac; };
+    tOutLbls.forEach(function (l) { l.node.textContent = num(charge(l.t), 0); });
+    tOut.textContent = num(charge(amb), 0);
   }
 
   /* ---- supercharger models ---- */
@@ -532,7 +541,7 @@
       update();
     });
   });
-  ['eng', 'sc', 'pul', 'rpm', 'eff'].forEach(function (id) { $(id).addEventListener('input', update); });
+  ['eng', 'sc', 'pul', 'rpm', 'eff', 'amb'].forEach(function (id) { $(id).addEventListener('input', update); });
   $('model').addEventListener('change', function () { showModelInfo(); update(); });
   $('rmodel').addEventListener('change', function () { showRotrexInfo(); update(); });
   document.querySelectorAll('.seg button[data-mode]').forEach(function (b) {
