@@ -175,6 +175,8 @@
         <div class="v"><span id="fad">–</span></div></div>
       <div class="stat wide boost"><div class="k">Theoretical Boost</div>
         <div class="v"><span id="boost">–</span> <small>psi</small></div></div>
+      <div class="stat wide" id="aeCard" hidden><div class="k">Adiabatic efficiency at this RPM &amp; boost (Eaton map)</div>
+        <div class="v"><span id="aeVal">–</span> <small>%</small></div></div>
       <div class="stat" id="impCard" hidden><div class="k">Impeller RPM</div>
         <div class="v"><span id="imp">–</span></div></div>
       <div class="stat" id="mfCard" hidden><div class="k">Engine airflow vs rated max</div>
@@ -351,9 +353,22 @@
   // cc per revolution; ae = peak adiabatic efficiency %. src: mfr = manufacturer figure, spec = listed as "70%+",
   // est = estimate from forum/owner reports. M-series size = cubic inches in the name (M90 = 90 ci).
   var MODELS = [
-    { g: 'Eaton', n: 'M45', cc: 45 * CC_PER_CI, ae: 60, src: 'est' },
-    { g: 'Eaton', n: 'M90', cc: 90 * CC_PER_CI, ae: 55, src: 'est' },
-    { g: 'Eaton', n: 'M112', cc: 1840, ae: 59, src: 'est' },
+    { g: 'Eaton', n: 'M45', cc: 45 * CC_PER_CI, ae: 68, src: 'map', map: {
+      f: [110, 200, 300, 400, 500, 600, 630], p: [1.1, 1.2, 1.4, 1.6, 1.8, 2.0],
+      z: [[42, 47, 50, 44, 40, 38, 37], [62, 65, 64, 55, 48, 42, 40], [63, 68, 65, 59, 53, 48, 46],
+          [60, 63, 62, 60, 57, 52, 51], [58, 61, 62, 60, 57, 54, 53], [55, 60, 61, 59, 57, 55, 54]] } },
+    { g: 'Eaton', n: 'M62', cc: 62 * CC_PER_CI, ae: 67, src: 'map', map: {
+      f: [170, 250, 350, 450, 550, 650, 750, 830], p: [1.1, 1.2, 1.4, 1.6, 1.8, 2.0],
+      z: [[50, 52, 52, 50, 46, 42, 40, 40], [60, 63, 63, 61, 56, 51, 47, 43], [63, 66, 67, 65, 61, 57, 54, 50],
+          [61, 64, 66, 64, 62, 59, 56, 53], [58, 61, 64, 63, 61, 58, 55, 54], [55, 58, 61, 61, 59, 57, 56, 54]] } },
+    { g: 'Eaton', n: 'M90', cc: 90 * CC_PER_CI, ae: 62, src: 'map', map: {
+      f: [250, 350, 450, 550, 650, 800, 950, 1100, 1190], p: [1.1, 1.2, 1.4, 1.6, 1.8, 2.0],
+      z: [[48, 50, 48, 46, 44, 42, 40, 40, 40], [58, 61, 60, 57, 53, 48, 45, 42, 40], [60, 62, 62, 60, 59, 55, 50, 48, 47],
+          [58, 60, 61, 61, 60, 57, 54, 50, 47], [56, 58, 59, 60, 59, 57, 55, 52, 50], [54, 56, 58, 58, 58, 56, 53, 52, 50]] } },
+    { g: 'Eaton', n: 'M112', cc: 1840, ae: 62, src: 'map', map: {
+      f: [300, 450, 600, 750, 900, 1050, 1200, 1350, 1420], p: [1.1, 1.2, 1.4, 1.6, 1.8, 2.0],
+      z: [[42, 46, 48, 46, 42, 38, 35, 33, 32], [50, 56, 58, 60, 55, 50, 45, 40, 38], [55, 60, 62, 61, 58, 53, 48, 43, 40],
+          [56, 60, 61, 60, 58, 54, 50, 46, 44], [57, 59, 60, 59, 57, 53, 50, 46, 44], [55, 58, 59, 58, 56, 52, 48, 44, 42]] } },
     { g: 'Eaton', n: 'R1320 (TVS)', cc: 1320, ae: 70, src: 'spec' },
     { g: 'Eaton', n: 'R1900 (TVS)', cc: 1900, ae: 70, src: 'spec' },
     { g: 'Whipple', n: 'W100AX', cc: 1600, ae: 81, src: 'mfr' },
@@ -401,10 +416,31 @@
     if (mode === 'model') { var m = MODELS[$('model').value]; return { cc: m.cc, eff: m.ae }; }
     return { cc: toCc('sc'), eff: parseFloat($('eff').value) };
   }
+  // bilinear lookup on an Eaton efficiency map (flow in m^3/hr across, pressure ratio down), clamped at the edges
+  function mapLookup(map, flow, pr) {
+    function seg(arr, v) {
+      if (v <= arr[0]) return [0, 0, 0];
+      if (v >= arr[arr.length - 1]) return [arr.length - 1, arr.length - 1, 0];
+      for (var i = 1; i < arr.length; i++) if (v <= arr[i]) return [i - 1, i, (v - arr[i - 1]) / (arr[i] - arr[i - 1])];
+    }
+    var c = seg(map.f, flow), r = seg(map.p, pr);
+    var top = map.z[r[0]][c[0]] + (map.z[r[0]][c[1]] - map.z[r[0]][c[0]]) * c[2];
+    var bot = map.z[r[1]][c[0]] + (map.z[r[1]][c[1]] - map.z[r[1]][c[0]]) * c[2];
+    return top + (bot - top) * r[2];
+  }
+  // blower inlet flow = engine flow x PR x (T1/T2); T2 depends on efficiency, so iterate
+  function mapEff(map, vEng, pr) {
+    var e = 60, t1 = REF_T + 459.67;
+    for (var i = 0; i < 4; i++) {
+      var t2 = t1 + idealRise(pr, REF_T) / (e / 100);
+      e = mapLookup(map, vEng * pr * t1 / t2, pr);
+    }
+    return e;
+  }
   function showModelInfo() {
     var m = MODELS[$('model').value];
     $('modelInfo').textContent = num(m.cc, 0) + ' cc / ' + num(m.cc / CC_PER_CI, 1) + ' ci per rev \u00b7 A.E. ' +
-      m.ae + '% (' + SRC_TXT[m.src] + '). Peak value; real A.E. varies with RPM and pressure ratio.';
+      m.ae + '% (' + SRC_TXT[m.src] + ').' + (m.map ? ' The live value below follows RPM and boost, read from Eaton\u2019s map (about \u00b13 points).' : ' Peak value; real A.E. varies with RPM and pressure ratio.');
   }
 
   function showRotrexInfo() {
@@ -430,7 +466,7 @@
     $('err').textContent = ok ? '' : 'Enter positive sizes and an A.E. from 1 to 100%.';
     if (!ok) {
       ['air', 'fad', 'ratio', 'boost', 'pr', 'imp', 'mflow'].forEach(function (i) { $(i).textContent = '–'; });
-      drawChart(null, 1);
+      drawChart(null, 1); $('aeCard').hidden = true;
       tachSc.textContent = '–'; flowVal.textContent = '–'; flowValCfm.textContent = '–';
       tachEng.textContent = rpm;
       tachLabelsOut.forEach(function (l) { l.node.textContent = ''; });
@@ -462,6 +498,9 @@
     $('ratio').textContent = num(ratio, 3);
     $('boost').textContent = num(boost, 1);
     $('pr').textContent = num(pr, 2);
+    var mm = mode === 'model' ? MODELS[$('model').value].map : null;
+    $('aeCard').hidden = !mm;
+    if (mm) { eff = mapEff(mm, flowAt(rpm, air), pr); $('aeVal').textContent = num(eff, 1); }
     drawChart(pr, eff / 100);
 
     tachLabelsOut.forEach(function (l) { l.node.textContent = fmtK(Math.round(l.rpm * ratio / 10) * 10); });
