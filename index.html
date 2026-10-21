@@ -63,6 +63,12 @@
   .g-cap { fill: var(--muted); font-size: 9px; text-anchor: middle; letter-spacing: .05em; }
   .g-val { fill: #fff; font-size: 20px; font-weight: 700; text-anchor: middle; font-variant-numeric: tabular-nums; }
   .g-val2 { fill: var(--lbl-out); font-size: 14px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+  .c-grid { stroke: var(--line); stroke-width: 1; }
+  .c-txt { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .c-exp { fill: none; stroke: var(--lbl-out); stroke-width: 3; stroke-linejoin: round; }
+  .c-ideal { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 5 4; }
+  .c-dot { fill: var(--lbl-out); stroke: #000; stroke-width: 2; }
+  .c-val { fill: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .needle { transition: transform .25s ease-out; transform-box: view-box; transform-origin: 150px 150px; }
   .needle line { stroke: #e03131; stroke-width: 3; stroke-linecap: round; }
   .hub { fill: #e03131; }
@@ -112,13 +118,6 @@
       </div>
     </div>
     <div class="field">
-      <label for="amb">Intake air temperature</label>
-      <div class="row">
-        <input id="amb" type="number" inputmode="decimal" step="any" value="70">
-        <span class="unit">&deg;F</span>
-      </div>
-    </div>
-    <div class="field">
       <label for="eff">Supercharger adiabatic efficiency</label>
       <div class="row">
         <input id="eff" type="number" inputmode="decimal" min="1" max="100" step="any" value="60">
@@ -139,13 +138,17 @@
         <div class="v"><span id="fad">–</span></div></div>
       <div class="stat wide boost"><div class="k">Theoretical Boost</div>
         <div class="v"><span id="boost">–</span> <small>psi</small></div></div>
-      <div class="stat"><div class="k">Ideal Temp Rise (100% eff.)</div>
+      <div class="stat"><div class="k">Ideal Temp Rise @ 70&deg;F (100% eff.)</div>
         <div class="v"><span id="dtI">–</span> <small>&deg;F</small></div></div>
-      <div class="stat boost"><div class="k">Expected Temp Rise</div>
+      <div class="stat boost"><div class="k">Expected Temp Rise @ 70&deg;F</div>
         <div class="v"><span id="dt">–</span> <small>&deg;F</small></div></div>
-      <div class="stat wide"><div class="k">Expected Charge Temperature</div>
-        <div class="v"><span id="tout">–</span> <small>&deg;F</small></div></div>
     </div>
+  </section>
+
+  <section class="card" aria-labelledby="t-h">
+    <h2 id="t-h">Expected Charge Temperature</h2>
+    <svg class="gauge" id="tchart" viewBox="0 0 300 200" role="img" aria-label="Charge temperature versus intake air temperature"></svg>
+    <div class="legend"><span><b>Expected (efficiency above)</b></span><span>Ideal (100%)</span></div>
   </section>
 
   <section class="card" aria-labelledby="g-h">
@@ -274,6 +277,39 @@
     return maxFlow;
   }
 
+  /* ---- charge temperature chart ---- */
+  var REF_T = 70, T_MIN = 30, T_MAX = 110;
+  var tchart = $('tchart');
+  function idealRise(pr, tF) { return pr > 1 ? (tF + 459.67) * (Math.pow(pr, 0.2857) - 1) : 0; }
+  function drawChart(pr, effFrac) {
+    while (tchart.firstChild) tchart.removeChild(tchart.firstChild);
+    if (pr === null) return;
+    var L = 40, Rr = 288, T = 22, B = 160;
+    var exp = function (t) { return t + idealRise(pr, t) / effFrac; };
+    var ide = function (t) { return t + idealRise(pr, t); };
+    var yMin = 20, yMax = Math.max(100, Math.ceil(exp(T_MAX) / 50) * 50);
+    var X = function (t) { return L + (t - T_MIN) / (T_MAX - T_MIN) * (Rr - L); };
+    var Y = function (v) { return B - (v - yMin) / (yMax - yMin) * (B - T); };
+    var yStep = (yMax - yMin) > 200 ? 100 : 50;
+    for (var v = Math.ceil(yMin / yStep) * yStep; v <= yMax; v += yStep) {
+      el(tchart, 'line', { x1: L, y1: Y(v), x2: Rr, y2: Y(v), 'class': 'c-grid' });
+      el(tchart, 'text', { x: L - 5, y: Y(v) + 3, 'class': 'c-txt', 'text-anchor': 'end' }, v);
+    }
+    for (var t = T_MIN; t <= T_MAX; t += 20) {
+      el(tchart, 'text', { x: X(t), y: B + 14, 'class': 'c-txt', 'text-anchor': 'middle' }, t);
+    }
+    el(tchart, 'text', { x: (L + Rr) / 2, y: B + 30, 'class': 'c-txt', 'text-anchor': 'middle' }, 'Intake air temp (°F)');
+    el(tchart, 'text', { x: L, y: 10, 'class': 'c-txt' }, 'Charge temp (°F)');
+    [[ide, 'c-ideal'], [exp, 'c-exp']].forEach(function (ln) {
+      var d = '';
+      for (var t2 = T_MIN; t2 <= T_MAX; t2 += 5) d += (d ? 'L' : 'M') + X(t2).toFixed(1) + ' ' + Y(ln[0](t2)).toFixed(1);
+      el(tchart, 'path', { d: d, 'class': ln[1] });
+    });
+    var rv = exp(REF_T);
+    el(tchart, 'circle', { cx: X(REF_T), cy: Y(rv), r: 5, 'class': 'c-dot' });
+    el(tchart, 'text', { x: X(REF_T), y: Y(rv) - 10, 'class': 'c-val', 'text-anchor': 'middle' }, num(rv, 0) + '°F @ ' + REF_T + '°F');
+  }
+
   /* ---- calculation ---- */
   function toCc(id) {
     var v = parseFloat($(id).value);
@@ -286,11 +322,12 @@
     var rpm = parseInt($('rpm').value, 10);
     $('rpmOut').textContent = rpm;
     var eng = toCc('eng'), sc = toCc('sc'), pul = parseFloat($('pul').value);
-    var amb = parseFloat($('amb').value), eff = parseFloat($('eff').value);
-    var ok = eng > 0 && sc > 0 && pul > 0 && isFinite(amb) && eff > 0 && eff <= 100;
-    $('err').textContent = ok ? '' : 'Enter positive sizes, a temperature, and an efficiency from 1 to 100%.';
+    var eff = parseFloat($('eff').value);
+    var ok = eng > 0 && sc > 0 && pul > 0 && eff > 0 && eff <= 100;
+    $('err').textContent = ok ? '' : 'Enter positive sizes and an efficiency from 1 to 100%.';
     if (!ok) {
-      ['air', 'fad', 'ratio', 'boost', 'pr', 'dtI', 'dt', 'tout'].forEach(function (i) { $(i).textContent = '–'; });
+      ['air', 'fad', 'ratio', 'boost', 'pr', 'dtI', 'dt'].forEach(function (i) { $(i).textContent = '–'; });
+      drawChart(null, 1);
       tachSc.textContent = '–'; flowVal.textContent = '–'; flowValCfm.textContent = '–';
       tachEng.textContent = rpm;
       tachLabelsOut.forEach(function (l) { l.node.textContent = ''; });
@@ -303,8 +340,7 @@
     var boost = ATM * (fad / air) - ATM;
     var pr = (boost + ATM) / ATM; // absolute outlet pressure / absolute inlet pressure
     // adiabatic compression: T2 = T1 * PR^((k-1)/k), k = 1.4; actual rise = ideal rise / efficiency
-    var tAbs = amb + 459.67;
-    var dtIdeal = pr > 1 ? tAbs * (Math.pow(pr, 0.2857) - 1) : 0;
+    var dtIdeal = idealRise(pr, REF_T);
     var dt = dtIdeal / (eff / 100);
 
     $('air').innerHTML = both(air);
@@ -314,7 +350,7 @@
     $('pr').textContent = num(pr, 2);
     $('dtI').textContent = num(dtIdeal, 0);
     $('dt').textContent = num(dt, 0);
-    $('tout').textContent = num(amb + dt, 0);
+    drawChart(pr, eff / 100);
 
     tachLabelsOut.forEach(function (l) { l.node.textContent = fmtK(Math.round(l.rpm * ratio / 10) * 10); });
     tachEng.textContent = num(rpm, 0);
@@ -345,7 +381,7 @@
       update();
     });
   });
-  ['eng', 'sc', 'pul', 'rpm', 'amb', 'eff'].forEach(function (id) { $(id).addEventListener('input', update); });
+  ['eng', 'sc', 'pul', 'rpm', 'eff'].forEach(function (id) { $(id).addEventListener('input', update); });
   update();
 })();
 </script>
