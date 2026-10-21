@@ -405,7 +405,6 @@
     { n: 'C30-74', d: 50, r: 9.49, nmax: 120000, flow: 0.31, prmax: (1.82 + 1.01325) / 1.01325, ae: 72, src: 'map', map: true },
     { n: 'C30-84', d: 50, r: 9.49, nmax: 120000, flow: 0.32, prmax: (1.82 + 1.01325) / 1.01325, ae: 72, src: 'map', map: true },
     { n: 'C30-94', d: 60, r: 9.49, nmax: 100000, flow: 0.39, prmax: (1.52 + 1.01325) / 1.01325, ae: 71, src: 'map', map: true },
-    { n: 'C30-94P', d: 60, r: 9.49, nmax: 100000, flow: 0.44, prmax: (1.64 + 1.01325) / 1.01325, ae: 70, src: 'est' },
     { n: 'C38-61', d: 65, r: 7.5, nmax: 90000, flow: 0.48, prmax: (1.9 + 1.01325) / 1.01325, ae: 73, src: 'map', map: true },
     { n: 'C38-71', d: 67, r: 7.5, nmax: 90000, flow: 0.55, prmax: (1.82 + 1.01325) / 1.01325, ae: 75, src: 'map', map: true },
     { n: 'C38-81', d: 69, r: 7.5, nmax: 90000, flow: 0.58, prmax: (1.85 + 1.01325) / 1.01325, ae: 72, src: 'map', map: true },
@@ -420,7 +419,7 @@
     ROTREX.forEach(function (m, i) {
       var o = document.createElement('option'); o.value = i; o.textContent = m.n; if (!m.map) o.className = 'nomap'; sel.appendChild(o);
     });
-    sel.value = '10';
+    sel.value = '9';
   })();
   var mode = 'manual';
   (function buildModels() {
