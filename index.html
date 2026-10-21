@@ -69,6 +69,22 @@
   .c-ideal { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 5 4; }
   .c-dot { fill: var(--lbl-out); stroke: #000; stroke-width: 2; }
   .c-val { fill: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  [hidden] { display: none !important; }
+  select {
+    width: 100%; font: inherit; font-size: 1.05rem; padding: 10px 12px; color: var(--ink);
+    background: var(--input-bg); border: 1px solid var(--line); border-radius: 10px;
+  }
+  select:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+  .seg.full { width: 100%; }
+  .seg.full button { flex: 1; padding: 10px 6px; font-size: .85rem; }
+  .seg.sm button { padding: 2px 9px; min-width: 0; font-size: .75rem; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pair > div { min-width: 0; }
+  .pair input[type=number] { width: 100%; }
+  .lblrow { display: flex; justify-content: space-between; align-items: center; min-height: 28px; margin-bottom: 4px; }
+  .lblrow label { margin: 0; font-size: .8rem; white-space: nowrap; }
+  .unit.sm { min-width: 0; padding-left: 2px; }
+  .note { color: var(--muted); font-size: .8rem; margin: 6px 0 0; }
   .needle { transition: transform .25s ease-out; transform-box: view-box; transform-origin: 150px 150px; }
   .needle line { stroke: #e03131; stroke-width: 3; stroke-linecap: round; }
   .hub { fill: #e03131; }
@@ -85,7 +101,7 @@
 <main>
   <header>
     <h1>Supercharger <span>Boost</span> Calculator</h1>
-    <p class="sub">Boost and flow are theoretical (100% volumetric efficiency, 7&Prime; crank pulley). Temperature uses the efficiency you enter.</p>
+    <p class="sub">Boost and flow are theoretical (100% volumetric efficiency, 7&Prime; crank pulley). Charge temperature uses the supercharger&rsquo;s adiabatic efficiency (A.E.).</p>
   </header>
 
   <section class="card" aria-labelledby="in-h">
@@ -101,12 +117,34 @@
       </div>
     </div>
     <div class="field">
-      <label for="sc">Supercharger displacement (per rev)</label>
-      <div class="row">
-        <input id="sc" type="number" inputmode="decimal" min="0" step="any" value="112">
-        <div class="seg" role="group" aria-label="Supercharger displacement unit">
-          <button type="button" data-for="sc" data-u="cc" aria-pressed="false">cc</button>
-          <button type="button" data-for="sc" data-u="ci" aria-pressed="true">ci</button>
+      <label id="mode-l">Supercharger</label>
+      <div class="seg full" role="group" aria-labelledby="mode-l">
+        <button type="button" data-mode="model" aria-pressed="false">Choose model</button>
+        <button type="button" data-mode="manual" aria-pressed="true">Displacement + A.E.</button>
+      </div>
+    </div>
+    <div class="field" id="modelBox" hidden>
+      <label for="model">Model</label>
+      <select id="model"></select>
+      <p class="note" id="modelInfo"></p>
+    </div>
+    <div class="field" id="manualBox">
+      <div class="pair">
+        <div>
+          <div class="lblrow"><label for="sc">Displacement</label>
+            <div class="seg sm" role="group" aria-label="Supercharger displacement unit">
+              <button type="button" data-for="sc" data-u="cc" aria-pressed="false">cc</button>
+              <button type="button" data-for="sc" data-u="ci" aria-pressed="true">ci</button>
+            </div>
+          </div>
+          <input id="sc" type="number" inputmode="decimal" min="0" step="any" value="112">
+        </div>
+        <div>
+          <div class="lblrow"><label for="eff">Adiabatic efficiency</label></div>
+          <div class="row">
+            <input id="eff" type="number" inputmode="decimal" min="1" max="100" step="any" value="60">
+            <span class="unit sm">%</span>
+          </div>
         </div>
       </div>
     </div>
@@ -115,13 +153,6 @@
       <div class="row">
         <input id="pul" type="number" inputmode="decimal" min="0" step="any" value="3.5">
         <span class="unit">inches</span>
-      </div>
-    </div>
-    <div class="field">
-      <label for="eff">Supercharger adiabatic efficiency</label>
-      <div class="row">
-        <input id="eff" type="number" inputmode="decimal" min="1" max="100" step="any" value="60">
-        <span class="unit">%</span>
       </div>
     </div>
     <p class="err" id="err" role="alert"></p>
@@ -138,17 +169,13 @@
         <div class="v"><span id="fad">–</span></div></div>
       <div class="stat wide boost"><div class="k">Theoretical Boost</div>
         <div class="v"><span id="boost">–</span> <small>psi</small></div></div>
-      <div class="stat"><div class="k">Ideal Temp Rise @ 70&deg;F (100% eff.)</div>
-        <div class="v"><span id="dtI">–</span> <small>&deg;F</small></div></div>
-      <div class="stat boost"><div class="k">Expected Temp Rise @ 70&deg;F</div>
-        <div class="v"><span id="dt">–</span> <small>&deg;F</small></div></div>
     </div>
   </section>
 
   <section class="card" aria-labelledby="t-h">
     <h2 id="t-h">Expected Charge Temperature</h2>
     <svg class="gauge" id="tchart" viewBox="0 0 300 200" role="img" aria-label="Charge temperature versus intake air temperature"></svg>
-    <div class="legend"><span><b>Expected (efficiency above)</b></span><span>Ideal (100%)</span></div>
+    <div class="legend"><span><b>Expected (at A.E.)</b></span><span>Ideal (100%)</span></div>
   </section>
 
   <section class="card" aria-labelledby="g-h">
@@ -310,6 +337,40 @@
     el(tchart, 'text', { x: X(REF_T), y: Y(rv) - 10, 'class': 'c-val', 'text-anchor': 'middle' }, num(rv, 0) + '°F @ ' + REF_T + '°F');
   }
 
+  /* ---- supercharger models ---- */
+  // cc per revolution; ae = peak adiabatic efficiency %. src: mfr = manufacturer figure, spec = listed as "70%+",
+  // est = estimate from forum/owner reports. M-series size = cubic inches in the name (M90 = 90 ci).
+  var MODELS = [
+    { g: 'Eaton', n: 'M45', cc: 45 * CC_PER_CI, ae: 60, src: 'est' },
+    { g: 'Eaton', n: 'M90', cc: 90 * CC_PER_CI, ae: 55, src: 'est' },
+    { g: 'Eaton', n: 'M112', cc: 1840, ae: 59, src: 'est' },
+    { g: 'Eaton', n: 'R1320 (TVS)', cc: 1320, ae: 70, src: 'spec' },
+    { g: 'Eaton', n: 'R1900 (TVS)', cc: 1900, ae: 70, src: 'spec' },
+    { g: 'Whipple', n: 'W100AX', cc: 1600, ae: 81, src: 'mfr' },
+    { g: 'Whipple', n: 'W140AX', cc: 2300, ae: 80, src: 'mfr' },
+    { g: 'Whipple', n: 'W175AX', cc: 2900, ae: 78, src: 'mfr' },
+    { g: 'Whipple', n: 'W200AX', cc: 3300, ae: 78, src: 'mfr' },
+    { g: 'Whipple', n: 'W245AX', cc: 4000, ae: 78, src: 'mfr' }
+  ];
+  var SRC_TXT = { mfr: 'manufacturer peak', spec: 'listed as 70%+', est: 'estimate' };
+  var mode = 'manual';
+  (function buildModels() {
+    var sel = $('model'), grp = null, last = '';
+    MODELS.forEach(function (m, i) {
+      if (m.g !== last) { grp = document.createElement('optgroup'); grp.label = m.g; sel.appendChild(grp); last = m.g; }
+      var o = document.createElement('option'); o.value = i; o.textContent = m.n; grp.appendChild(o);
+    });
+  })();
+  function sc() {
+    if (mode === 'model') { var m = MODELS[$('model').value]; return { cc: m.cc, eff: m.ae }; }
+    return { cc: toCc('sc'), eff: parseFloat($('eff').value) };
+  }
+  function showModelInfo() {
+    var m = MODELS[$('model').value];
+    $('modelInfo').textContent = num(m.cc, 0) + ' cc / ' + num(m.cc / CC_PER_CI, 1) + ' ci per rev \u00b7 A.E. ' +
+      m.ae + '% (' + SRC_TXT[m.src] + '). Peak value; real A.E. varies with RPM and pressure ratio.';
+  }
+
   /* ---- calculation ---- */
   function toCc(id) {
     var v = parseFloat($(id).value);
@@ -321,12 +382,11 @@
   function update() {
     var rpm = parseInt($('rpm').value, 10);
     $('rpmOut').textContent = rpm;
-    var eng = toCc('eng'), sc = toCc('sc'), pul = parseFloat($('pul').value);
-    var eff = parseFloat($('eff').value);
-    var ok = eng > 0 && sc > 0 && pul > 0 && eff > 0 && eff <= 100;
-    $('err').textContent = ok ? '' : 'Enter positive sizes and an efficiency from 1 to 100%.';
+    var S = sc(), eng = toCc('eng'), scCc = S.cc, pul = parseFloat($('pul').value), eff = S.eff;
+    var ok = eng > 0 && scCc > 0 && pul > 0 && eff > 0 && eff <= 100;
+    $('err').textContent = ok ? '' : 'Enter positive sizes and an A.E. from 1 to 100%.';
     if (!ok) {
-      ['air', 'fad', 'ratio', 'boost', 'pr', 'dtI', 'dt'].forEach(function (i) { $(i).textContent = '–'; });
+      ['air', 'fad', 'ratio', 'boost', 'pr'].forEach(function (i) { $(i).textContent = '–'; });
       drawChart(null, 1);
       tachSc.textContent = '–'; flowVal.textContent = '–'; flowValCfm.textContent = '–';
       tachEng.textContent = rpm;
@@ -336,20 +396,15 @@
     }
     var air = eng * 0.5;
     var ratio = BASE_PULLEY / pul;
-    var fad = sc * ratio;
+    var fad = scCc * ratio;
     var boost = ATM * (fad / air) - ATM;
     var pr = (boost + ATM) / ATM; // absolute outlet pressure / absolute inlet pressure
-    // adiabatic compression: T2 = T1 * PR^((k-1)/k), k = 1.4; actual rise = ideal rise / efficiency
-    var dtIdeal = idealRise(pr, REF_T);
-    var dt = dtIdeal / (eff / 100);
 
     $('air').innerHTML = both(air);
     $('ratio').textContent = num(ratio, 3);
     $('fad').innerHTML = both(fad);
     $('boost').textContent = num(boost, 1);
     $('pr').textContent = num(pr, 2);
-    $('dtI').textContent = num(dtIdeal, 0);
-    $('dt').textContent = num(dt, 0);
     drawChart(pr, eff / 100);
 
     tachLabelsOut.forEach(function (l) { l.node.textContent = fmtK(Math.round(l.rpm * ratio / 10) * 10); });
@@ -365,7 +420,7 @@
   }
 
   /* ---- wiring ---- */
-  document.querySelectorAll('.seg button').forEach(function (b) {
+  document.querySelectorAll('.seg button[data-for]').forEach(function (b) {
     b.addEventListener('click', function () {
       var id = b.dataset.for, to = b.dataset.u;
       if (units[id] === to) return;
@@ -382,6 +437,19 @@
     });
   });
   ['eng', 'sc', 'pul', 'rpm', 'eff'].forEach(function (id) { $(id).addEventListener('input', update); });
+  $('model').addEventListener('change', function () { showModelInfo(); update(); });
+  document.querySelectorAll('.seg button[data-mode]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      mode = b.dataset.mode;
+      document.querySelectorAll('.seg button[data-mode]').forEach(function (x) {
+        x.setAttribute('aria-pressed', String(x.dataset.mode === mode));
+      });
+      $('modelBox').hidden = mode !== 'model';
+      $('manualBox').hidden = mode !== 'manual';
+      if (mode === 'model') showModelInfo();
+      update();
+    });
+  });
   update();
 })();
 </script>
